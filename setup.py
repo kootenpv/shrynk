@@ -6,7 +6,7 @@ with open("README.md") as f:
 
 MAJOR_VERSION = '0'
 MINOR_VERSION = '0'
-MICRO_VERSION = '1'
+MICRO_VERSION = '2'
 VERSION = "{}.{}.{}".format(MAJOR_VERSION, MINOR_VERSION, MICRO_VERSION)
 
 setup(
@@ -21,7 +21,7 @@ setup(
     package_data={
         # If any package contains *.txt or *.rst files, include them:
         # '': ['*.txt', '*.rst'],
-        'data': ['shrynk/*.jsonl']
+        'data': ['shrynk/*.jsonl', 'shrynk/*.pkl']
     },
     install_requires=[
         'pandas',
@@ -31,6 +31,7 @@ setup(
         "tabulate",
         "preconvert",
         "preconvert_numpy",
+        'dill',
     ],
     extras_require={
         "all": "fastparquet[brotli,lz4,lzo,snappy,zstandard]",

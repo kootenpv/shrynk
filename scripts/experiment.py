@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from shrynk.pandas import PandasCompressor
 
-pdc = PandasCompressor("default", n_estimators=200)
+pdc = PandasCompressor("default", n_estimators=200, max_depth=5)
 
 X_train, y_train, X_test, y_test = pdc.train_model("size", n_validations=5)
 X_train = X_train.fillna(X_train.mean())

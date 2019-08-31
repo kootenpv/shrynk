@@ -5,6 +5,7 @@ import json
 import pkgutil
 import pandas as pd
 import numpy as np
+import dill
 from collections import defaultdict
 from sklearn.ensemble import RandomForestClassifier
 
@@ -120,7 +121,14 @@ class Predictor:
         bests = self.upsample(bests)
         if n_validations is not None:
             return self.crossval(data, bests, target, n_validations)
-        self.clf.fit(pd.io.json.json_normalize(bests["features"]).fillna(-100), bests.y)
+        try:
+            clf = dill.loads(
+                pkgutil.get_data("data", "shrynk/{}_{}.pkl".format(self.model_name.lower(), target))
+            )
+            self.clf = clf
+        except FileNotFoundError:
+            self.clf.fit(pd.io.json.json_normalize(bests["features"]).fillna(-100), bests.y)
+        return self.clf
 
     def predict(self, features):
         if isinstance(features, pd.DataFrame):
