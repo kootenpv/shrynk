@@ -73,8 +73,8 @@ html = '''
         </style>
 
         <!--Import Google Icon Font-->
-        <link href="http://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-        <link rel="stylesheet" type="text/css" href="http://fonts.googleapis.com/css?family=Roboto:200|Roboto+Slab">
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Roboto:200|Roboto+Slab">
         <!--Import materialize.css-->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
 
@@ -222,7 +222,7 @@ def upload_file():
             predicted_compression = " ".join(["{}={!r}".format(k, v) for k, v in inferred.items()])
             result_index = [
                 i + 1 for i, x in enumerate(bench_res.index) if x == predicted_compression
-            ]
+            ] + [len(bench_res.index) + 1]
             learning = "none" if result_index[0] == 1 else "inherit"
             nth = {1: "1st", 2: "2nd", 3: "3rd"}.get(result_index[0], str(result_index[0]) + "th")
             return html + str(
