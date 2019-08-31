@@ -6,7 +6,7 @@ with open("README.md") as f:
 
 MAJOR_VERSION = '0'
 MINOR_VERSION = '0'
-MICRO_VERSION = '2'
+MICRO_VERSION = '3'
 VERSION = "{}.{}.{}".format(MAJOR_VERSION, MINOR_VERSION, MICRO_VERSION)
 
 setup(
@@ -34,8 +34,8 @@ setup(
         'dill',
     ],
     extras_require={
-        "all": "fastparquet[brotli,lz4,lzo,snappy,zstandard]",
-        "noc": "fastparquet[brotli,lz4,snappy]",
+        "all": ["fastparquet[brotli,lz4,lzo,snappy,zstandard]"],
+        "noc": ["fastparquet[brotli,lz4,snappy]"],
     },
     classifiers=[
         'Intended Audience :: Developers',
