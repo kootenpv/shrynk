@@ -1,3 +1,4 @@
+import time
 import os
 import random
 import warnings
@@ -8,37 +9,25 @@ import numpy as np
 import dill
 from collections import defaultdict
 from sklearn.ensemble import RandomForestClassifier
+from shrynk.utils import scalers, get_model_data
 
 
 class Predictor:
     def __init__(self, model_name, clf=RandomForestClassifier, **clf_kwargs):
+        if "n_estimators" in clf._get_param_names() and "n_estimators" not in clf_kwargs:
+            clf_kwargs["n_estimators"] = 100
         self.clf = clf(**clf_kwargs)
         self.model_name = model_name
-        self.value_lookup = None
-        self.arg_lookup = None
+        self.model_data = None
         self.X_ = None
         self.y_ = None
 
-    def get_model_data(self):
-        """ Gets the model data """
-        try:
-            data = pkgutil.get_data("data", "shrynk/{}.jsonl".format(self.model_name.lower()))
-            data = pd.DataFrame(
-                [json.loads(line) for line in data.decode("utf8").split("\n") if line.strip()]
-            )
-            print("from package")
-        except FileNotFoundError:
-            with open(os.path.expanduser("~/shrynk_{}.jsonl".format(self.model_name))) as f:
-                data = pd.DataFrame([json.loads(line) for line in f if line.strip()])
-        data = pd.concat((data, pd.io.json.json_normalize(data["result"])), axis=1)
-        return data
-
     def upsample(self, bests):
-        largest_n = bests["kwargs"].astype(str).value_counts().max()
+        largest_n = bests["y"].astype(str).value_counts().max()
         bests = (
             bests.groupby("y")
             .apply(lambda x: x.sample(largest_n, replace=True))
-            .set_index("group_id")
+            .reset_index(drop=True)
         )
         return bests
 
@@ -105,29 +94,50 @@ class Predictor:
             report[strategy_name] = savings
         return class_accuracy, report
 
-    def train_model(self, target, n_validations=None):
-        data = self.get_model_data()
-        bests = data.groupby("group_id").apply(lambda group: group.loc[group[target].idxmin()])
-        # have to encode it into integers and do a lookup here when wrapping prediction!
-        # then return actual best args
-        self.value_lookup = {
-            x: i for i, x in enumerate(set([tuple(x.items()) for x in bests["kwargs"]]))
-        }
-        self.arg_lookup = {i: dict(x) for x, i in self.value_lookup.items()}
-        y = pd.Series(
-            [self.value_lookup[tuple(x.items())] for x in bests["kwargs"]], index=bests.index
-        )
+    def train_model(self, size, write, read, scaler="z", n_validations=None, balanced=True):
+        targets = ["size", "write_time", "read_time"]
+        if self.model_data is None:
+            self.model_data = get_model_data(self.model_name)
+        scale = scalers.get(scaler, scaler)
+        size_write_read = np.array((size, write, read))
+        features = []
+        y = []
+        feature_ids = []
+        for x in self.model_data:
+            vals = [[y[t] for t in targets] for y in x["bench"]]
+            z = (scale(vals) * size_write_read).sum(axis=1).argmin()
+            features.append(x["features"])
+            y.append(x["bench"][z]["kwargs"])
+            feature_ids.append(x["feature_id"])
+
+        bests = pd.DataFrame(features)
         bests["y"] = y
-        bests = self.upsample(bests)
+        bests["feature_id"] = feature_ids
+
+        bests = bests.sort_values("y")
+        bests["train"] = bests.index % 2 == 0
+
+        if balanced:
+            bests = self.upsample(bests)
         if n_validations is not None:
-            return self.crossval(data, bests, target, n_validations)
+            train = bests.query("train")
+            test = bests.query("~train")
+            self.clf.fit(train.drop(["y", "train", "feature_id"], axis=1).fillna(-100), train["y"])
+            preds = self.clf.predict(test.drop(["y", "train", "feature_id"], axis=1).fillna(-100))
+            print("accuracy", np.mean(preds == test.y), "now refitting...")
+        self.clf.fit(bests.drop(["y", "train", "feature_id"], axis=1).fillna(-100), bests.y)
+        # TO FIX CROSSVAL
+        # if n_validations is not None:
+        #     return self.crossval(data, bests, target, n_validations)
         try:
+            weight = "{}_{}_{}".format(*size_write_read)
             clf = dill.loads(
-                pkgutil.get_data("data", "shrynk/{}_{}.pkl".format(self.model_name.lower(), target))
+                pkgutil.get_data("data", "shrynk/{}_.pkl".format(self.model_name.lower(), weight))
             )
             self.clf = clf
+            print("loaded model pickle")
         except FileNotFoundError:
-            self.clf.fit(pd.io.json.json_normalize(bests["features"]).fillna(-100), bests.y)
+            self.clf.fit(bests.drop(["y", "train", "feature_id"], axis=1).fillna(-100), bests.y)
         return self.clf
 
     def predict(self, features):
@@ -136,7 +146,7 @@ class Predictor:
         if isinstance(features, dict):
             features = pd.DataFrame([features])
         warnings.filterwarnings(module='sklearn*', action='ignore', category=DeprecationWarning)
-        return self.arg_lookup[self.clf.predict(features.fillna(-100))[0]]
+        return json.loads(self.clf.predict(features.fillna(-100))[0])
 
     infer = predict
 

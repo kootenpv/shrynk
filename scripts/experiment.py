@@ -3,9 +3,146 @@ import just
 import random
 import pandas as pd
 import numpy as np
+
 from shrynk.pandas import PandasCompressor
 
+pdc = PandasCompressor("default", n_estimators=100)
+for i in range(5):
+    pdc.train_model((3, 2, 1), n_validations=1)
+
+
+pdc.run_benchmarks([pd.DataFrame({"a": [1]})], save=False)
+
+# from shrynk.pandas import PandasCompressor
+from sklearn.preprocessing import scale
+
+with open("/home/pascal/shrynk_new.jsonl") as f:
+    data = [json.loads(x) for x in f.read().split("\n") if x]
+
+upsample = False
+targets = ["size", "write_time", "read_time"]
+size_write_read = np.array((0, 1, 0))
+features = []
+y = []
+feature_ids = []
+for x in data:
+    z = (
+        (scale([[y[t] for t in targets] for y in x["bench"]]) * size_write_read)
+        .sum(axis=1)
+        .argmin()
+    )
+    features.append(x["features"])
+    y.append(x["bench"][z]["kwargs"])
+    feature_ids.append(x["feature_id"])
+
+features = pd.DataFrame(features)
+features["y"] = y
+features["feature_id"] = feature_ids
+
+features = features.sort_values("y")
+features["train"] = features.index % 2 == 0
+
+if upsample:
+    largest_n = features["y"].astype(str).value_counts().max()
+    features = (
+        features.groupby("y")
+        .apply(lambda x: x.sample(largest_n, replace=True))
+        .reset_index(drop=True)
+    )
+
+X_train = features.query("train").drop(["y", "train", "feature_id"], axis=1)
+y_train = features.query("train")["y"]
+X_test = features.query("~train").drop(["y", "train", "feature_id"], axis=1)
+y_test = features.query("~train")["y"]
+
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+
+clf = LogisticRegression()
+clf.fit(X_train.fillna(-100), y_train)
+print("acc", np.mean(clf.predict(X_test.fillna(-100)) == y_test))
+
+preds = clf.predict(X_test.fillna(-100))
+
+test = features.query("~train")
+test["preds"] = preds
+
+lookup = {x["feature_id"]: x["bench"] for x in data}
+scores = []
+for fid, group in test.groupby("feature_id"):
+    # bla = pd.DataFrame(lookup[fid])
+    # if group.shape[0] != 1:
+    #    "a"+1
+    # pred = group.preds.iloc[0]
+    # bla["z"] = (scale([[y[t] for t in targets] for y in lookup[fid]]) * weights).sum(axis=1)
+    # bla = bla.sort_values("z")
+    bench = pd.DataFrame(lookup[fid]).drop_duplicates("kwargs")
+    bench["z"] = (scale([[y[t] for t in targets] for y in lookup[fid]]) * weights).sum(axis=1)
+    try:
+        pred = bench[bench.kwargs == group.iloc[0].preds].z.iloc[0]
+        best = bench[bench.kwargs == group.iloc[0].y].z.iloc[0]
+        scores.append(best - pred)
+        if best > pred:
+            "a" + 1
+    except IndexError:
+        continue
+
+
 pdc = PandasCompressor("default", n_estimators=200, max_depth=5)
+pdc.train_model("auto", auto_weights=(5, 4, 3))
+
+pdc2 = PandasCompressor("default", n_estimators=200, max_depth=5)
+pdc2.train_model("size")
+
+# auto_weights=(size, write_time, read_time)
+# higher means it has more influence
+# pdc.train_model("auto", auto_weights=(5, 4, 3))
+#                  winners                                  times
+# {'engine': 'csv', 'compression': 'bz2'}                     144
+# {'engine': 'csv', 'compression': 'zip'}                      50
+# {'engine': 'fastparquet', 'compression': 'GZIP'}             42
+# {'engine': 'csv', 'compression': 'gzip'}                     26
+# {'engine': 'fastparquet', 'compression': 'LZO'}              12
+# {'engine': 'csv', 'compression': None}                        6
+# {'engine': 'pyarrow', 'compression': 'brotli'}                4
+# {'engine': 'pyarrow', 'compression': 'snappy'}                3
+# {'engine': 'fastparquet', 'compression': 'LZ4'}               3
+# {'engine': 'fastparquet', 'compression': 'UNCOMPRESSED'}      3
+# {'engine': 'pyarrow', 'compression': 'gzip'}                  2
+
+# pdc.train_model("auto", auto_weights=(1,3,1))
+#                  winners                                  times
+# {'engine': 'csv', 'compression': 'zip'}                     104
+# {'engine': 'csv', 'compression': 'bz2'}                      53
+# {'engine': 'csv', 'compression': 'gzip'}                     40
+# {'engine': 'fastparquet', 'compression': 'GZIP'}             29
+# {'engine': 'fastparquet', 'compression': 'LZO'}              22
+# {'engine': 'pyarrow', 'compression': 'snappy'}               21
+# {'engine': 'pyarrow', 'compression': 'gzip'}                  8
+# {'engine': 'csv', 'compression': None}                        7
+# {'engine': 'pyarrow', 'compression': 'brotli'}                6
+# {'engine': 'fastparquet', 'compression': 'UNCOMPRESSED'}      3
+# {'engine': 'pyarrow', 'compression': None}                    1
+# {'engine': 'fastparquet', 'compression': 'LZ4'}               1
+
+# pdc.train_model("auto", auto_weights=(1,3,3))
+# ## -- End pasted text --
+# from package
+# {'engine': 'csv', 'compression': 'zip'}                     96
+# {'engine': 'csv', 'compression': 'gzip'}                    51
+# {'engine': 'pyarrow', 'compression': 'snappy'}              36
+# {'engine': 'fastparquet', 'compression': 'LZO'}             33
+# {'engine': 'csv', 'compression': 'bz2'}                     27
+# {'engine': 'fastparquet', 'compression': 'GZIP'}            16
+# {'engine': 'csv', 'compression': None}                      15
+# {'engine': 'pyarrow', 'compression': 'gzip'}                 7
+# {'engine': 'pyarrow', 'compression': 'brotli'}               6
+# {'engine': 'pyarrow', 'compression': None}                   4
+# {'engine': 'fastparquet', 'compression': 'LZ4'}              2
+# {'engine': 'fastparquet', 'compression': 'UNCOMPRESSED'}     2
 
 X_train, y_train, X_test, y_test = pdc.train_model("size", n_validations=5)
 X_train = X_train.fillna(X_train.mean())
@@ -119,3 +256,10 @@ pdc.predict(pd.DataFrame(np.random.random((10000, int(random.random() * 500000))
 # y = train["size"]
 # clf2 = RandomForestRegressor(n_estimators=1000, feval=mape_metric)
 # clf2.fit(X[::2], np.log(y[::2]))
+
+# from sklearn.preprocessing import scale
+# weights = [5, 4, 3]
+# df = pd.DataFrame({"size": [1,2,3,4], "write": [1,2,3,4], "read": [1,2,3,4]}, index=list("abcd"), columns=["size", "write", "read"])
+# print(df)
+# df[:] = scale(df) * np.array([weights])
+# df.sum(axis=1).idxmin()

@@ -34,6 +34,9 @@ for x in just.glob("/home/pascal/rcsvs/*"):
 
 from shrynk.pandas import save, infer, PandasCompressor
 
+pdc = PandasCompressor("default")
+pdc.run_benchmarks(dfs)
+
 # original size 130M of all .csvs bundled in R packages (blind test-set)
 # optimize=write_time        = 113M in 47.7s
 # optimize=size              = 21M in 6m29s

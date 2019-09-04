@@ -2,7 +2,22 @@
 # -*- coding: utf-8 -*-
 import os
 import pandas as pd
-from shrynk.pandas import save, load
+from shrynk.pandas import save, load, infer, PandasCompressor
+
+
+def test_infer():
+    infer(pd.DataFrame({"a": [1, 2, 3]}))
+
+
+def test_infer_path():
+    expected = {"engine": "pyarrow", "compression": "brotli"}
+    assert PandasCompressor.infer_from_path("bla.pyarrow.brotli") == expected
+
+
+def test_benchmark_and_train():
+    pdc = PandasCompressor("default", n_estimators=10)
+    pdc.run_benchmarks([pd.DataFrame({"a": [1, 2, 3, 4]})], save=False, ignore_seen=False)
+    pdc.train_model(4, 1, 1)
 
 
 def test_pandas():

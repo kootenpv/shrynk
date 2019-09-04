@@ -28,10 +28,10 @@ setup(
         'pyarrow',
         'fastparquet',
         "sklearn",
-        "tabulate",
         "preconvert",
         "preconvert_numpy",
         'dill',
+        'wrapt_timeout_decorator',
     ],
     extras_require={
         "all": ["fastparquet[brotli,lz4,lzo,snappy,zstandard]"],

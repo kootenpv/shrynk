@@ -1,10 +1,11 @@
 import time
 import os
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from preconvert.output import json
-import tabulate
 import tempfile
+from shrynk.utils import md5, get_model_data
+
+
+from wrapt_timeout_decorator import timeout as timeout_fn
 
 
 class BaseCompressor:
@@ -13,6 +14,7 @@ class BaseCompressor:
 
     def __init__(self, model_name, *args, **kwargs):
         self.model_name = model_name
+        self.model_data = None
 
     def infer(self, obj):
         raise NotImplementedError
@@ -34,12 +36,17 @@ class BaseCompressor:
     def is_valid(self, *args, **kwargs):
         raise NotImplementedError
 
-    def benchmark(self, object_save, kwargs):
+    def benchmark(self, object_save, kwargs, timeout):
         t1 = time.time()
         path = "ZZZklkl"
         with tempfile.TemporaryDirectory() as fdir:
             try:
-                path = self.save(object_save, fdir + "/", kwargs)
+                if timeout:
+                    path = timeout_fn(timeout)(self.save)(object_save, fdir + "/", kwargs)
+                else:
+                    path = self.save(object_save, fdir + "/", kwargs)
+            except TimeoutError:
+                return None, None, None
             except self.bench_exceptions:
                 return None, None, None
             try:
@@ -52,17 +59,16 @@ class BaseCompressor:
                 return None, None, None
         return size, write_time, read_time
 
-    def run_benchmarks(self, data_generator, save=True, start_from_beginning=True):
+    def run_benchmarks(self, data_generator, save=True, ignore_seen=True, timeout=300):
+        from preconvert.output import json
+
         model_path = os.path.expanduser("~/shrynk_{}.jsonl".format(self.model_name))
-        num_skip = -1
-        if not start_from_beginning and os.path.isfile(model_path):
-            with open(model_path) as f:
-                num_skip = len(f.read().split("\n")) // len(self.compression_options)
+        if self.model_data is None:
+            self.model_data = get_model_data(self.model_name)
+        feature_ids = set([x["feature_id"] for x in self.model_data])
         results = []
         index = []
         for num, df in enumerate(data_generator):
-            if num < num_skip:
-                continue
             if isinstance(df, str) and os.path.isfile(df):
                 try:
                     df = self.load(df)
@@ -74,37 +80,44 @@ class BaseCompressor:
                 continue
             stat_computation_time = time.time()
             features = self.get_features(df)
-            stat_computation_time = time.time() - stat_computation_time
-            group_id = hash(str(features))
             if features is None:
                 continue
+            feature_id = md5(features)
+            if ignore_seen and feature_id in feature_ids:
+                print("seen", feature_id)
+                continue
+            stat_computation_time = time.time() - stat_computation_time
+            result = {
+                "feature_id": feature_id,
+                "features": features,
+                "class": self.__class__.__name__,
+                "stat_computation_time": stat_computation_time,
+            }
+            bench = []
             for kwargs in self.compression_options:
-                size, write_time, read_time = self.benchmark(df, kwargs)
-                print(kwargs, size, write_time, read_time)
+                size, write_time, read_time = self.benchmark(df, kwargs, timeout)
                 if size is None:
                     # write_error(line)
+                    print("error, skipping", kwargs)
                     continue
-                # print("   ", size, write_time, read_time, engine, compression)
-                result = {"size": size, "write_time": write_time, "read_time": read_time}
-                jdata = {
-                    "group_id": group_id,
-                    "class": self.__class__.__name__,
-                    "kwargs": kwargs,
-                    "features": features,
-                    "stat_computation_time": stat_computation_time,
-                    "result": result,
-                }
+                print(kwargs, size, write_time, read_time)
+                bench.append(
+                    {
+                        "kwargs": json.dumps(kwargs),
+                        "size": size,
+                        "write_time": write_time,
+                        "read_time": read_time,
+                    }
+                )
+            result["bench"] = bench
+            if bench:
+                self.model_data.append(result)
                 if save:
                     with open(model_path, "a") as f:
-                        f.write(json.dumps(jdata) + "\n")
-                index.append(" ".join(["{}={!r}".format(k, v) for k, v in kwargs.items()]))
+                        f.write(json.dumps(result) + "\n")
                 results.append(result)
-        info = pd.DataFrame(results, index=index, columns=["size", "write_time", "read_time"])
-        return info
 
-    def show_score(self, info, size_weight=100, write_weight=-10, read_weight=-1):
-        info["score"] = (info["size"] * size_weight) / -(
-            (info["write_time"] * write_weight) * (info["read_time"] * read_weight)
-        )
-        print(tabulate.tabulate(info.sort_values("score"), headers=info.columns))
-        del info["score"]
+            feature_ids.add(feature_id)
+        ### run benchmarks should return a total overview or something, but now just from the last df
+        # return pd.DataFrame(bench).set_index("kwargs")
+        return results

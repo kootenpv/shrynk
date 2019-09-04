@@ -1,3 +1,4 @@
+import re
 import os
 import zipfile
 
@@ -17,41 +18,87 @@ def safelen(x):
         return 0
 
 
+# story:
+# in the setup of the compressor we should use the basics options that don't require extras_require
+# in the extras we can add the ones we want, which will then be imported
+# - default model is always included in the package
+# - for extras, it will download the data and it will train a model?
+# for models, set the random_seed to 42
+
+from pandas.io.common import _compression_to_extension
+
+_csv_opts = [
+    {"engine": "csv", "compression": x} for x in [None] + list(_compression_to_extension.keys())
+]
+
+# OPTIONAL: load pyarrow
+try:
+    import pyarrow
+    from pyarrow import ArrowTypeError
+
+    _pyarrow_exceptions = (ArrowTypeError,)
+    _pyarrow_opts = [
+        [
+            {"engine": "pyarrow", "compression": y}
+            for y in re.split("[', {}]+", x.split(": ")[1])
+            if y
+        ]
+        for x in pyarrow.compress.__doc__.split("\n")
+        if "upported types" in x
+    ][0]
+except ImportError:
+    arrow_exceptions = ()
+    _pyarrow = []
+
+# OPTIONAL: load fastparquet
+try:
+    from fastparquet.compression import compressions
+
+    # BROTLI IS BUGGED!
+    _fastparquet_opts = [
+        {"engine": "fastparquet", "compression": x} for x in compressions.keys() if x != "BROTLI"
+    ]
+except ImportError:
+    _fastparquet_opts = []
+
+
 class PandasCompressor(Predictor, BaseCompressor):
     bench_exceptions = (
         ValueError,
-        ArrowTypeError,
         pd.errors.ParserError,
         zipfile.BadZipFile,
         UnicodeDecodeError,
         OSError,
         pd.errors.EmptyDataError,
-    )
-    compression_options = [
-        {"engine": "csv", "compression": "None"},
-        {"engine": "csv", "compression": "gzip"},
-        {"engine": "csv", "compression": "bz2"},
-        {"engine": "csv", "compression": "xz"},
-        {"engine": "csv", "compression": "zip"},
-        # pyarrow # {‘NONE’, ‘SNAPPY’, ‘GZIP’, ‘LZO’, ‘BROTLI’, ‘LZ4’, ‘ZSTD’}
-        {"engine": "pyarrow", "compression": None},
-        {"engine": "pyarrow", "compression": "snappy"},
-        {"engine": "pyarrow", "compression": "gzip"},
-        {"engine": "pyarrow", "compression": "brotli"},
-        {"engine": "fastparquet", "compression": "GZIP"},
-        {"engine": "fastparquet", "compression": "UNCOMPRESSED"},
-        {"engine": "fastparquet", "compression": "BROTLI"},
-        # {"engine": "fastparquet", "compression": "LZ4"},
-        # C
-        # {"engine": "fastparquet", "compression": "LZO"},
-        # # # # # # ("fastparquet", "ZSTANDARD"),
-        # fastparquet can do per column
-        # pip install fastparquet[brotli]
-        # pip install fastparquet[lz4]
-        # pip install fastparquet[lzo]
-        # pip install fastparquet[zstandard]
-        # ("fastparquet", {str(x): "BROTLI" if x % 2 == 1 else "GZIP" for x in range(5)})
-    ]
+    ) + _pyarrow_exceptions
+
+    compression_options = _fastparquet_opts + _pyarrow_opts + _csv_opts
+    # [
+
+    #     {"engine": "csv", "compression": None},
+    #     {"engine": "csv", "compression": "gzip"},
+    #     {"engine": "csv", "compression": "bz2"},
+    #     {"engine": "csv", "compression": "xz"},
+    #     {"engine": "csv", "compression": "zip"},
+    #     # pyarrow # {‘NONE’, ‘SNAPPY’, ‘GZIP’,  ‘BROTLI’, ‘LZ4’, ‘ZSTD’}
+    #     {"engine": "pyarrow", "compression": None},
+    #     {"engine": "pyarrow", "compression": "snappy"},
+    #     {"engine": "pyarrow", "compression": "gzip"},
+    #     {"engine": "pyarrow", "compression": "brotli"},
+    #     {"engine": "fastparquet", "compression": "GZIP"},
+    #     {"engine": "fastparquet", "compression": "UNCOMPRESSED"},
+    #     {"engine": "fastparquet", "compression": "BROTLI"},
+    #     # {"engine": "fastparquet", "compression": "LZ4"},
+    #     # C
+    #     # {"engine": "fastparquet", "compression": "LZO"},
+    #     # # # # # # ("fastparquet", "ZSTANDARD"),
+    #     # fastparquet can do per column
+    #     # pip install fastparquet[brotli]
+    #     # pip install fastparquet[lz4]
+    #     # pip install fastparquet[lzo]
+    #     # pip install fastparquet[zstandard]
+    #     # ("fastparquet", {str(x): "BROTLI" if x % 2 == 1 else "GZIP" for x in range(5)})
+    # ]
 
     @classmethod
     def infer_from_path(cls, file_path):
@@ -99,16 +146,17 @@ class PandasCompressor(Predictor, BaseCompressor):
             )
             str_missing_proportion = (~df[str_cols].notnull()).mean().mean()
         else:
-            str_len_quantiles = [np.nan, np.nan, np.nan]
-            str_missing_proportion = np.nan
+            str_len_quantiles = [0, 0, 0]
+            str_missing_proportion = 0
         if float_cols and not df[float_cols].empty:
             float_equal_0 = (df[float_cols] == 0).mean().mean()
             float_missing_proportion = (~df[str_cols].notnull()).mean().mean()
         else:
-            float_equal_0 = np.nan
-            float_missing_proportion = np.nan
+            float_equal_0 = 0
+            float_missing_proportion = 0
         cardinality = df.apply(pd.Series.nunique)
         cardinality_quantile_proportion = cardinality.quantile([0.25, 0.50, 0.75]) / num_obs
+        memory_usage = df.memory_usage().sum()
         data = {
             # standard
             "num_obs": num_obs,
@@ -127,7 +175,7 @@ class PandasCompressor(Predictor, BaseCompressor):
             "str_len_quantile_25": str_len_quantiles[0],
             "str_len_quantile_50": str_len_quantiles[1],
             "str_len_quantile_75": str_len_quantiles[2],
-            "memory_usage": df.memory_usage().sum(),
+            "memory_usage": memory_usage,
         }
         return data
 
@@ -139,13 +187,36 @@ class PandasCompressor(Predictor, BaseCompressor):
         return df
 
 
+# - set of ids
+# X = [x["features"] for x in results]
+# allowed_kwargs = set(['{"compression": null, "engine": "csv"}'])
+# y = [min([y for y in x["bench"] if y["kwargs"] in allowed_kwargs], key=lambda x: x[target])["kwargs"] for x in results]
+# -- for quick bench lookup
+#
+
+trained_models = {}
+
+
+def _get_model(model_name, size_write_read):
+    key = (model_name,) + size_write_read
+    if key not in trained_models:
+        pdc = PandasCompressor(model_name)
+        pdc.train_model(*size_write_read)
+        trained_models[key] = pdc
+    return trained_models[key]
+
+
 def save(
-    df, fname_prefix, inferred_kwargs=None, optimize="size", model_name="default", **save_kwargs
+    df,
+    fname_prefix,
+    inferred_kwargs=None,
+    size=3,
+    write=1,
+    read=1,
+    model_name="default",
+    **save_kwargs
 ):
-    if optimize not in ["size", "write_time", "read_time"]:
-        raise ValueError("Must choose one of optimize='size OR write_time OR read_time'.")
-    pdc = PandasCompressor(model_name)
-    pdc.train_model(optimize)
+    pdc = _get_model(model_name, (size, write, read))
     return pdc.save(df, fname_prefix, inferred_kwargs, **save_kwargs)
 
 
@@ -153,9 +224,6 @@ def load(file_path, inferred_kwargs=None, **load_kwargs):
     return PandasCompressor.load(file_path, inferred_kwargs, **load_kwargs)
 
 
-def infer(df, optimize="size", model_name="default"):
-    if optimize not in ["size", "write_time", "read_time"]:
-        raise ValueError("Must choose one of optimize='size OR write_time OR read_time'.")
-    pdc = PandasCompressor(model_name)
-    pdc.train_model(optimize)
+def infer(df, size=1, write=0, read=0, model_name="default"):
+    pdc = _get_model(model_name, (size, write, read))
     return pdc.infer(df)
