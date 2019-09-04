@@ -6,7 +6,7 @@ with open("README.md") as f:
 
 MAJOR_VERSION = '0'
 MINOR_VERSION = '0'
-MICRO_VERSION = '4'
+MICRO_VERSION = '6'
 VERSION = "{}.{}.{}".format(MAJOR_VERSION, MINOR_VERSION, MICRO_VERSION)
 
 setup(
@@ -21,7 +21,7 @@ setup(
     package_data={
         # If any package contains *.txt or *.rst files, include them:
         # '': ['*.txt', '*.rst'],
-        'data': ['shrynk/*.jsonl', 'shrynk/*.pkl']
+        'data': ['shrynk/*.gzip']
     },
     install_requires=[
         'pandas',
