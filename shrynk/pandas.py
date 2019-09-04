@@ -130,7 +130,9 @@ class PandasCompressor(Predictor, BaseCompressor):
         if inferred_kwargs is None:
             inferred_kwargs = cls.infer_from_path(file_path)
         if inferred_kwargs["engine"] is None or inferred_kwargs["engine"] == "csv":
-            data = pd.read_csv(file_path, **load_kwargs)
+            data = pd.read_csv(
+                file_path, compression=inferred_kwargs.get("compression"), **load_kwargs
+            )
         else:
             data = pd.read_parquet(file_path, engine=inferred_kwargs["engine"], **load_kwargs)
         return data

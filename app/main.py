@@ -35,7 +35,7 @@ def get_blob(features):
 
 weights = np.array((3, 1, 1))
 scale = scalers["z"]
-pdc = PandasCompressor("default")
+pdc = PandasCompressor("default", n_estimators=50)
 pdc.train_model(*weights, scale)
 
 UPLOAD_FOLDER = './'
@@ -272,11 +272,10 @@ def get_benchmark_html(df, fname):
         blob = get_blob(features)
         if blob.exists():
             results = json.loads(blob.download_as_string())
-            bench_res = results[0]["bench"]
+            bench_res = results["bench"]
         else:
-            bench_res = pdc.run_benchmarks([df], save=False, ignore_seen=False, timeout=False)[0][
-                "bench"
-            ]
+            results = pdc.run_benchmarks([df], save=False, ignore_seen=False, timeout=False)[0]
+            bench_res = results["bench"]
             blob.upload_from_string(json.dumps(results))
     else:
         bench_res = pdc.run_benchmarks([df], save=False, ignore_seen=False, timeout=False)[0][
@@ -373,16 +372,7 @@ def upload_file():
         if file and allowed_file(file.filename):
             try:
                 infer = pdc.infer_from_path(file.filename)
-                if infer["engine"] != "csv" or infer["engine"] != None:
-                    tmp_fname = "tmp." + file.filename
-                    try:
-                        with open(tmp_fname, "wb") as f:
-                            f.write(file.read())
-                        data = pdc.load(tmp_fname, infer)
-                    finally:
-                        os.remove(tmp_fname)
-                else:
-                    data = pdc.load(file, infer)
+                data = pdc.load(file, infer)
             except pd.errors.ParserError as e:
                 return html + "<h4>{}</h4>".format(str(e))
             # filename = secure_filename(file.filename)
