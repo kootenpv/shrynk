@@ -16,7 +16,7 @@ def test_infer_path():
 
 def test_benchmark_and_train():
     pdc = PandasCompressor("default", n_estimators=10)
-    pdc.run_benchmarks([pd.DataFrame({"a": [1, 2, 3, 4]})], save=False, ignore_seen=False)
+    pdc.run_benchmarks([pd.DataFrame({"a": [1, 2, 3, 4]})], ignore_seen=False)
     pdc.train_model(4, 1, 1)
 
 

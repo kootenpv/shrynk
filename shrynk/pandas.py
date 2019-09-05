@@ -34,9 +34,9 @@ _csv_opts = [
 # OPTIONAL: load pyarrow
 try:
     import pyarrow
-    from pyarrow import ArrowTypeError
+    from pyarrow import ArrowTypeError, ArrowNotImplementedError, ArrowInvalid
 
-    _pyarrow_exceptions = (ArrowTypeError,)
+    _pyarrow_exceptions = (ArrowTypeError, ArrowNotImplementedError, ArrowInvalid)
     _pyarrow_opts = [
         [
             {"engine": "pyarrow", "compression": y}

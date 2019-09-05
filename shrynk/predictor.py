@@ -97,7 +97,7 @@ class Predictor:
     def train_model(self, size, write, read, scaler="z", n_validations=None, balanced=True):
         targets = ["size", "write_time", "read_time"]
         if self.model_data is None:
-            self.model_data = get_model_data(self.model_name)
+            self.model_data = get_model_data(self.model_name, self.compression_options)
         scale = scalers.get(scaler, scaler)
         size_write_read = np.array((size, write, read))
         features = []
@@ -147,6 +147,13 @@ class Predictor:
             features = pd.DataFrame([features])
         warnings.filterwarnings(module='sklearn*', action='ignore', category=DeprecationWarning)
         return json.loads(self.clf.predict(features.fillna(-100))[0])
+
+    def predict_proba(self, features):
+        if isinstance(features, pd.DataFrame):
+            features = self.get_features(features)
+        if isinstance(features, dict):
+            features = pd.DataFrame([features])
+        return dict(zip(self.clf.classes_, self.clf.predict_proba(features)[0]))
 
     infer = predict
 

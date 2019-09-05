@@ -64,10 +64,12 @@ class BaseCompressor:
 
         model_path = os.path.expanduser("~/shrynk_{}.jsonl".format(self.model_name))
         if self.model_data is None:
-            self.model_data = get_model_data(self.model_name)
+            self.model_data = get_model_data(self.model_name, self.compression_options)
         feature_ids = set([x["feature_id"] for x in self.model_data])
         results = []
         index = []
+        if isinstance(data_generator, pd.DataFrame):
+            data_generator = [data_generator]
         for num, df in enumerate(data_generator):
             if isinstance(df, str) and os.path.isfile(df):
                 try:

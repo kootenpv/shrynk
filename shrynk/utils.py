@@ -1,9 +1,9 @@
 import os
+import pandas as pd
 from gzip import GzipFile, decompress
 import pkgutil
 import hashlib
 from sklearn.preprocessing import scale, robust_scale, minmax_scale, maxabs_scale
-import functools
 
 
 def md5(features):
@@ -20,11 +20,14 @@ scalers = {
     "robust_scale": robust_scale,
 }
 
+data_cache = {}
 
-@functools.lru_cache()
-def get_model_data(model_name):
+
+def get_model_data(model_name, compression_options=None):
     from preconvert.output import json
 
+    if model_name in data_cache:
+        return data_cache[model_name]
     """ Gets the model data """
     try:
         data = pkgutil.get_data("data", "shrynk/{}.jsonl.gzip".format(model_name.lower()))
@@ -35,6 +38,12 @@ def get_model_data(model_name):
     except FileNotFoundError:
         with open(os.path.expanduser("~/shrynk_{}.jsonl".format(model_name))) as f:
             data = [json.loads(x) for x in f.read().split("\n") if x]
+    if compression_options is not None:
+        known_kwargs = set([json.dumps(x) for x in compression_options])
+        for x in data:
+            x["bench"] = [y for y in x["bench"] if y["kwargs"] in known_kwargs]
+        print("filtered compressions")
+    data_cache[model_name] = data
     return data
 
 
@@ -56,3 +65,14 @@ def _package_data(file_path):
     base = os.path.basename(file_path).replace("shrynk_", "")
     dest = "/home/pascal/egoroot/shrynk/data/shrynk/"
     os.rename(file_path + ".gzip", os.path.join(dest, base + ".gzip"))
+
+
+def add_z_to_bench(bench, size, write, read, scaler="z"):
+    if not isinstance(bench, pd.DataFrame):
+        bench = pd.DataFrame(bench)
+    if "kwargs" in bench.columns:
+        bench = bench.set_index("kwargs")
+    scale = scalers.get(scaler, scaler)
+    z = (scale(bench) * (size, write, read)).sum(axis=1)
+    bench["z"] = z
+    return bench.sort_values("z")
