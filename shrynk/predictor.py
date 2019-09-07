@@ -94,7 +94,7 @@ class Predictor:
             report[strategy_name] = savings
         return class_accuracy, report
 
-    def train_model(self, size, write, read, scaler="z", n_validations=None, balanced=True):
+    def train_model(self, size, write, read, scaler="z", validate_clfs=False, balanced=True):
         targets = ["size", "write_time", "read_time"]
         if self.model_data is None:
             self.model_data = get_model_data(self.model_name, self.compression_options)
@@ -119,7 +119,7 @@ class Predictor:
 
         if balanced:
             bests = self.upsample(bests)
-        if n_validations is not None:
+        if validate_clfs:
             train = bests.query("train")
             test = bests.query("~train")
             self.clf.fit(train.drop(["y", "train", "feature_id"], axis=1).fillna(-100), train["y"])

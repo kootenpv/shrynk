@@ -69,7 +69,7 @@ def _package_data(file_path):
 
 def add_z_to_bench(bench, size, write, read, scaler="z"):
     if not isinstance(bench, pd.DataFrame):
-        bench = pd.DataFrame(bench)
+        bench = pd.DataFrame(bench)[["kwargs", "size", "write_time", "read_time"]]
     if "kwargs" in bench.columns:
         bench = bench.set_index("kwargs")
     scale = scalers.get(scaler, scaler)

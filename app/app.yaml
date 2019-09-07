@@ -1,3 +1,7 @@
 runtime: python37
 instance_class: F4
 entrypoint: gunicorn -w 2 -b 0.0.0.0:$PORT main:app
+handlers:
+  - url: /.*
+    secure: always
+    script: auto

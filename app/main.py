@@ -3,6 +3,8 @@ import re
 import os
 import sys
 import time
+from copy import deepcopy
+from datetime import datetime
 from flask import Flask, flash, request, redirect, url_for
 from werkzeug.utils import secure_filename
 from flask import send_from_directory
@@ -20,17 +22,76 @@ from preconvert.output import json  # also install preconvert_numpy
 from google.cloud import storage
 
 BUCKET_NAME = "api-project-435023019049.appspot.com"
-IN_PRODUCTION = "main.py" != sys.argv[0]
-os.environ[
-    "GOOGLE_APPLICATION_CREDENTIALS"
-] = "/home/pascal/Downloads/api-project-435023019049-a83be40d22b6.json"
+IN_PRODUCTION = (sys.argv[0] != "main.py") and not sys.argv[0].endswith("ipython")
+DATA_VERSION = "000"
+
+if not IN_PRODUCTION:
+    os.environ[
+        "GOOGLE_APPLICATION_CREDENTIALS"
+    ] = "/home/pascal/Downloads/api-project-435023019049-a83be40d22b6.json"
+
+
+from shrynk.pandas import PandasCompressor
+
+
+with open("table.html") as f:
+    table = f.read()
+
+
+def td(x, unit=""):
+    if unit == "ms":
+        return ["<td>{}{}</td>".format(int(x * 1000), "ms")]
+    if unit == "b":
+        if x > 1024:
+            return ["<td>{}{}</td>".format(x // 1024, "kb")]
+    return ["<td>{}{}</td>".format(x, unit)]
+
+
+def format_w(weights):
+    return "z (s={}, w={}, r={})".format(*weights)
+
+
+def format_res(bench, weights, fname):
+    heads = "\n".join(
+        [
+            "<th>{}</th>".format(x)
+            for x in ["compression", "score", "size", "write_time", "read_time"]
+        ]
+    )
+    rows_of_cols = [[r.Index, r[1], r.size, r.write_time, r.read_time] for r in bench.itertuples()]
+    body = (
+        "<tr style='line-height: normal'>\n"
+        + "\n</tr>\n<tr style='line-height: normal'>\n".join(
+            [
+                "\n".join(
+                    [
+                        "<td>{}</td>".format(
+                            x[0]
+                            .replace(" ", "+")
+                            .replace("engine=", "")
+                            .replace("compression=", "")
+                        )
+                        .replace("'", "")
+                        .replace("UNCOMPRESSED", "UNCOMPR.")
+                    ]
+                    + td(x[1])
+                    + td(x[2], "b")
+                    + td(x[3], "ms")
+                    + td(x[4], "ms")
+                )
+                for x in rows_of_cols
+            ]
+        )
+        + "\n</tr>\n"
+    )
+    return table.format(filename=fname, heads=heads, body=body)
 
 
 def get_blob(features):
     storage_client = storage.Client()
     bucket = storage_client.get_bucket(BUCKET_NAME)
     blob_name = md5(features)
-    blob = bucket.blob(blob_name + "_shrynk_" + shrynk.__version__)
+    blob = bucket.blob(DATA_VERSION + "_" + blob_name)
     print("accessed blob")
     return blob
     # blob.upload_from_string(json.dumps(results))
@@ -65,7 +126,15 @@ def replacenth(string, sub, wanted, n):
     return new_string
 
 
-html = '''
+with open("material_datatable.css") as f:
+    mattable = f.read()
+
+with open("material_datatable.js") as f:
+    matjas = f.read()
+
+
+html = (
+    '''
     <!doctype html>
     <head>
         <style>
@@ -109,6 +178,18 @@ html = '''
             background-color: #ee6e73 !important;
             color: #fff !important;
          }
+         #uploadButton {
+            border: 2px solid #ee6e73;
+            color: #ee6e73;
+            background-color: white;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 20px;
+            font-weight: bold;
+            height: 60px;
+            margin-top: 1rem;
+            margin-bottom: 1rem
+         }
          .codes {
              word-break: normal;
              word-wrap: normal;
@@ -120,6 +201,12 @@ html = '''
             -webkit-transform: scaleX(-1);
             -ms-transform: scaleX(-1);
         }
+        .tableFitContent {
+            width: fit-content;
+       }
+'''
+    + mattable
+    + '''
         </style>
 
         <!--Import Google Icon Font-->
@@ -127,12 +214,16 @@ html = '''
         <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Roboto:200|Roboto+Slab">
         <!--Import materialize.css-->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+        <link rel="stylesheet" href="https://cdn.datatables.net/1.10.19/css/jquery.dataTables.min.css">
 
         <!--Let browser know website is optimized for mobile-->
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>shrynk.ai - Using the Power of Machine Learning to Compress</title>
     </head>
-    <title>shrynk.ai - Using the Power of Machine Learning to Compress</title>
-    <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+    <body onresize="addTableClassOnSmall()">
+        <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+        <script type="text/javascript" src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 
     <div style='line-height: 1; font-family: "Roboto Slab", serif;'>
@@ -224,7 +315,7 @@ Weighted (3, 1, 1): csv+bz2   ✓
 <center>
            <h5 style="padding: 1rem;">
              <i class="material-icons icon-flipped">format_quote</i>
-             <b>Data & Model</b> for the community, by the community"
+                 <b>Data & Model</b> for the community, by the community
              <i class="material-icons">format_quote</i>
            </h5>
         </center>
@@ -237,7 +328,7 @@ Weighted (3, 1, 1): csv+bz2   ✓
             <center>
           <center>
             <div class="upload-btn-wrapper" style="position: relative; overflow: hidden; display: inline-block;">
-              <button class="btn z-depth-2" style="border: 2px solid #ee6e73; color: #ee6e73; background-color: white; padding: 8px 20px; border-radius: 8px; font-size: 20px; font-weight: bold; height: 60px; margin-top: 1rem; margin-bottom: 1rem;">
+              <button id="uploadButton" class="btn z-depth-2">
                 Upload file... <span style="font-size: small;">(max 1 MB.)</span>
               </button>
               <input type="file" id="file" name="file" style="font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0;"/>
@@ -254,24 +345,46 @@ Weighted (3, 1, 1): csv+bz2   ✓
             <p>should be over soon ;)</p>
           </div>
         </div>
+
+        <script>var clicky_site_ids = clicky_site_ids || []; clicky_site_ids.push(27486);</script>
+        <script async src="//pmetrics.performancing.com/js"></script>
+        <noscript><p><img alt="Performancing Metrics" width="1" height="1" src="//pmetrics.performancing.com/27486ns.gif" /></p></noscript>
+
         <script type="text/javascript">
             document.addEventListener('DOMContentLoaded', function() {
               var elems = document.querySelectorAll('.modal');
               var instances = M.Modal.init(elems);
-              window.scrollTo(0,document.getElementById("tableau").scrollHeight);
+              window.scrollTo(0,document.getElementById("datatable").scrollHeight);
             });
             document.getElementById("file").onchange = function() {
                 var instance = M.Modal.getInstance(document.getElementById("modal1"));
                 instance.open();
                 document.getElementById("form").submit();
             };
+
+            function addTableClassOnSmall() {
+                var ww = document.body.clientWidth;
+                    if (ww >= 600) {
+     console.log("removing")
+                      document.getElementById("resultTable").classList.remove('tableFitContent');
+                    } else if (ww < 600) {
+console.log("adding")
+                      document.getElementById("resultTable").classList.add('tableFitContent');
+                };
+            };
+
+        '''
+    + matjas
+    + '''
         </script>
     '''
+)
 
 
 def get_benchmark_html(df, fname):
     features = pdc.get_features(df)
     bench_res = None
+    save = False
     if IN_PRODUCTION:
         blob = get_blob(features)
         if blob.exists():
@@ -279,8 +392,9 @@ def get_benchmark_html(df, fname):
             bench_res = results["bench"]
         else:
             results = pdc.run_benchmarks([df], save=False, ignore_seen=False, timeout=False)[0]
-            bench_res = results["bench"]
-            blob.upload_from_string(json.dumps(results))
+            # make a copy not to pop kwargs from results object which will be saved
+            bench_res = deepcopy(results)["bench"]
+            save = True
     else:
         bench_res = pdc.run_benchmarks([df], save=False, ignore_seen=False, timeout=False)[0][
             "bench"
@@ -294,6 +408,19 @@ def get_benchmark_html(df, fname):
     bench_res = bench_res[[z_name, "size", "write_time", "read_time"]]
     y = json.dumps(inferred)
     res_index = [i + 1 for i, x in enumerate(bench_res.index) if x == y] + [-1]
+    if save:
+        ip = request.environ.get("HTTP_X_FORWARDED_FOR", "")
+        ip = ip.split(",")[0]
+        results["web"] = {
+            "utctime": datetime.utcnow().isoformat(),
+            "ip": ip,
+            "predicted": inferred,
+            "res_index": res_index[0],  # 1 is 1st, 2 is 2nd
+            "filename": fname,
+            "weights": weights.tolist(),
+        }
+        blob.upload_from_string(json.dumps(results))
+        print("saved blob")
     bench_res.index = [
         " ".join(["{}={!r}".format(k, v) for k, v in json.loads(x).items()])
         for x in bench_res.index
@@ -325,14 +452,11 @@ def get_benchmark_html(df, fname):
                 nth[1:], nth, bench_res.shape[0], learning
             )
             + "</center></div></div>"
-            + "<center><h4>Ground truth (results of compressing)</h4><div class='show-on-med-and-down hide-on-large-only' style='padding: 0.5rem; color: grey'> -- scroll -> </center>"
+            + "<center><h4>Ground truth</h4><div class='show-on-med-and-down hide-on-large-only' style='padding: 0.5rem; color: grey'> -- scroll -> </center>"
             + replacenth(
-                bench_res.to_html().replace(
-                    '<table border="1" class="dataframe">',
-                    '<table id="tableau" border="1" class="dataframe responsive-table highlight z-depth-2" style="line-height: 0.2">',
-                ),
-                "<tr>",
-                '<tr class="resultinv {}">'.format(nth[1:]),
+                format_res(bench_res, tuple(weights), fname),
+                "<tr ",
+                '<tr class="resultinv {}" '.format(nth[1:]),
                 int(nth[:-2]),
             )
         )
