@@ -155,6 +155,9 @@ html = (
          .result.nd, .result.rd {
              color: orange;
          }
+         .result.th {
+             color: #ee6e73;
+         }
          .resultinv {
              font-size: larger;
              background-color: #ff9999;
@@ -164,6 +167,9 @@ html = (
          }
          .resultinv.nd, .resultinv.rd {
              background-color: orange;
+         }
+         .resultinv.th {
+             background-color: #ee6e73;
          }
          .headthree {
              border: 1px dashed;
