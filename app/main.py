@@ -1,4 +1,5 @@
 import io
+import gzip
 import re
 import os
 import sys
@@ -100,11 +101,19 @@ def get_blob(features):
 
 weights = np.array((3, 1, 1))
 scale = scalers["z"]
+
+# from catboost import CatBoostClassifier
+
+# CatBoostClassifier._get_param_names = lambda: {}
+
+# pdc = PandasCompressor("default", clf=CatBoostClassifier, n_estimators=200)
+# pdc.train_model(2, 1, 0, scaler="robust_scale", balanced=False)
+
 pdc = PandasCompressor("default", n_estimators=50)
 pdc.train_model(*weights, scale)
 
 UPLOAD_FOLDER = './'
-ALLOWED_EXTENSIONS = {'csv', 'txt', 'parquet'}
+ALLOWED_EXTENSIONS = {'csv', 'txt', 'parquet', 'gz'}
 ALLOWED_EXTENSIONS.update([x["compression"] for x in pdc.compression_options])
 
 app = Flask(__name__)
@@ -351,7 +360,7 @@ Weighted (3, 1, 1): csv+bz2   ✓
         </div>
         <div id="modal1" class="modal">
           <div class="modal-content">
-            <h4>Loading...</h4>
+            <h4>Shrynking...</h4>
             <p>should be over soon ;)</p>
           </div>
         </div>
@@ -463,14 +472,14 @@ def get_benchmark_html(df, fname):
             # just using features here instead of data to be faster
             + " ".join(["{}={!r}".format(k, v) for k, v in inferred.items()])
             + "<br><b>Result:</b><br><span class='result {}'>{}</span> / {}<br><div style='display: {}'><span style='color: #ee6e73'>Wrong!</span> We will learn from this...</div>".format(
-                nth[1:], nth, bench_res.shape[0], learning
+                nth[-2:], nth, bench_res.shape[0], learning
             )
             + "</center></div></div>"
             + "<center><h4>Ground truth</h4><div class='show-on-small hide-on-med-and-up' style='padding: 0.5rem; color: grey'> -- scroll -> </center>"
             + replacenth(
                 format_res(bench_res, tuple(weights), fname),
                 "<tr ",
-                '<tr class="resultinv {}" '.format(nth[1:]),
+                '<tr class="resultinv {}" '.format(nth[-2:]),
                 int(nth[:-2]),
             )
         )
@@ -514,7 +523,10 @@ def upload_file():
         if file and allowed_file(file.filename):
             try:
                 infer = pdc.infer_from_path(file.filename)
-                data = pdc.load(file, infer)
+                if ".csv.gz" in file.filename:
+                    data = pdc.load(io.BytesIO(gzip.decompress(file.read())), infer)
+                else:
+                    data = pdc.load(file, infer)
             except pd.errors.ParserError as e:
                 return html + "<h4>{}</h4>".format(str(e))
             # filename = secure_filename(file.filename)

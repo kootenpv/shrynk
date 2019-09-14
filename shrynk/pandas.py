@@ -112,6 +112,8 @@ class PandasCompressor(Predictor, BaseCompressor):
                 compression = x["compression"]
         if engine is None and "parquet" in endings:
             engine = "auto"
+        if engine == "csv" and compression is None and len(endings) > 1:
+            compression = "infer"
         return {"engine": engine, "compression": compression}
 
     def _save(self, df, file_path_prefix, engine=None, compression=None, **save_kwargs):

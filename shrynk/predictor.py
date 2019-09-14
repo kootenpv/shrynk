@@ -2,7 +2,6 @@ import time
 import os
 import random
 import warnings
-import json
 import pkgutil
 import pandas as pd
 import numpy as np
@@ -141,12 +140,17 @@ class Predictor:
         return self.clf
 
     def predict(self, features):
+        from preconvert.output import json
+
         if isinstance(features, pd.DataFrame):
             features = self.get_features(features)
         if isinstance(features, dict):
             features = pd.DataFrame([features])
         warnings.filterwarnings(module='sklearn*', action='ignore', category=DeprecationWarning)
-        return json.loads(self.clf.predict(features.fillna(-100))[0])
+        pred = self.clf.predict(features.fillna(-100))[0]
+        if not isinstance(pred, str):
+            pred = pred[0]
+        return json.loads(pred)
 
     def predict_proba(self, features):
         if isinstance(features, pd.DataFrame):
