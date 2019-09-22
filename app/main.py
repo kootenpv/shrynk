@@ -237,6 +237,12 @@ html = (
 
         <!--Let browser know website is optimized for mobile-->
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <meta charset="utf-8" />
+        <meta name="author" content="Pascal van Kooten" />
+        <meta property="og:title" content="shrynk.ai - Using the Power of Machine Learning to Compress" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.shrynk.ai/" />
+        <meta property="og:image" content="https://uvreatio.sirv.com/Images/Shrynk.png" />
         <title>shrynk.ai - Using the Power of Machine Learning to Compress</title>
     </head>
     <body onresize="addTableClassOnSmall()">
