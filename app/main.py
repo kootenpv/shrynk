@@ -322,13 +322,16 @@ Weighted (3, 1, 1): csv+bz2   ✓</code>
 <center style="margin-bottom: 1rem">Install:</center>
             <center><code class="codes">$ pip install shrynk</center></code>
 <p>Now in python...</p>
-            <code class="codes" style="line-height: 1.3;">>>> from shrynk.pandas import save</code>
+            <code class="codes" style="line-height: 1.3;">>>> from shrynk import save</code>
 <p>You control how important size, write_time and read_time are. <br> Here, size is 3 times more important than write and read. </p>
 <code class="codes show-on-med-and-down hide-on-large-only" style="line-height: 1.3;">>>> save(df, "mydata",
          size=3, write=1, read=1)
 "mydata.csv.bz2"</code>
 <code class="codes hide-on-med-and-down show-on-large" style="line-height: 1.3;">>>> save(df, "mydata", size=3, write=1, read=1)
 "mydata.csv.bz2"</code>
+            <center style="margin-bottom: 1rem; margin-top: 1rem;">or from command line (will predict and compress) </center>
+            <code class="codes" style="line-height: 1.3;">$ shrynk compress mydata.csv</code>
+            <code class="codes" style="line-height: 1.3;">$ shrynk decompress mydata.csv.gz</code>
           </div>
         </div></div>
 

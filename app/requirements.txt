@@ -1,7 +1,7 @@
 Flask==1.0.2
 brotli
 lz4
-shrynk[noc]==0.0.10
+shrynk[noc]==0.1.19
 gunicorn
 google-cloud-storage
 wrapt_timeout_decorator
