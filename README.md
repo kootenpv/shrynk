@@ -2,6 +2,7 @@
   <img src="./Shrynk.png" width="400rem"/>
 </p>
 
+[![Build Status](https://travis-ci.org/kootenpv/shrynk.svg?branch=master)](https://travis-ci.org/kootenpv/shrynk)
 [![PyPI](https://img.shields.io/pypi/pyversions/shrynk.svg?style=flat-square&logo=python)](https://pypi.python.org/pypi/shrynk/)
 [![PyPI](https://img.shields.io/pypi/v/shrynk.svg?style=flat-square&logo=pypi)](https://pypi.python.org/pypi/shrynk/)
 [![HitCount](http://hits.dwyl.io/kootenpv/shrynk.svg)](http://hits.dwyl.io/kootenpv/shrynk)
