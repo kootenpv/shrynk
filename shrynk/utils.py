@@ -12,6 +12,12 @@ def md5(features):
     return hashlib.md5(json.dumps(features, sort_keys=True).encode()).hexdigest()
 
 
+def shrynk_path(path):
+    base = os.path.expanduser("~/.shrynk/")
+    os.makedirs(base, exist_ok=True)
+    return os.path.join(base, path)
+
+
 scalers = {
     "z": scale,
     "scale": scale,
@@ -23,27 +29,30 @@ scalers = {
 data_cache = {}
 
 
-def get_model_data(model_name, compression_options=None):
+def get_model_data(model_type, model_name, compression_options=None):
     from preconvert.output import json
 
     if model_name in data_cache:
-        return data_cache[model_name]
+        return data_cache[model_type + "_" + model_name]
     """ Gets the model data """
     try:
-        data = pkgutil.get_data("data", "shrynk/{}.jsonl.gzip".format(model_name.lower()))
+        data = pkgutil.get_data("data", "shrynk/{}_{}.jsonl.gzip".format(model_type, model_name))
         data = [
             json.loads(line) for line in decompress(data).decode("utf8").split("\n") if line.strip()
         ]
-        print("from package")
+        # print("from package")
     except FileNotFoundError:
-        with open(os.path.expanduser("~/shrynk_{}.jsonl".format(model_name))) as f:
-            data = [json.loads(x) for x in f.read().split("\n") if x]
+        try:
+            with open(shrynk_path("{}_{}.jsonl".format(model_type, model_name))) as f:
+                data = [json.loads(x) for x in f.read().split("\n") if x]
+        except FileNotFoundError:
+            data = []
     if compression_options is not None:
         known_kwargs = set([json.dumps(x) for x in compression_options])
         for x in data:
             x["bench"] = [y for y in x["bench"] if y["kwargs"] in known_kwargs]
-        print("filtered compressions")
-    data_cache[model_name] = data
+        # print("filtered compressions")
+    data_cache[model_type + "_" + model_name] = data
     return data
 
 

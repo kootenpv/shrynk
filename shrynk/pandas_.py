@@ -1,5 +1,7 @@
 import re
 import os
+import math
+from collections import Counter
 import zipfile
 
 import numpy as np
@@ -62,6 +64,16 @@ except ImportError:
     _fastparquet_opts = []
 
 
+def estimate_uniqueness_proportion(df, col, r=10000):
+    # sample = serv.Detalle.sample(r)
+    n = df.shape[0]
+    sample = df[col][np.random.randint(0, n, r)]
+    counts = sample.value_counts()
+    fis = Counter(counts)
+    estimate = math.sqrt(n / r) * fis[1] + sum([fis[x] for x in fis if x > 1])
+    return estimate / n
+
+
 class PandasCompressor(Predictor, BaseCompressor):
     bench_exceptions = (
         ValueError,
@@ -72,6 +84,7 @@ class PandasCompressor(Predictor, BaseCompressor):
         pd.errors.EmptyDataError,
     ) + _pyarrow_exceptions
 
+    model_type = "pandas"
     compression_options = _fastparquet_opts + _pyarrow_opts + _csv_opts
     # [
 
@@ -116,14 +129,31 @@ class PandasCompressor(Predictor, BaseCompressor):
             compression = "infer"
         return {"engine": engine, "compression": compression}
 
-    def _save(self, df, file_path_prefix, engine=None, compression=None, **save_kwargs):
-        if file_path_prefix.endswith(".csv") or file_path_prefix.endswith(".parquet"):
-            raise ValueError("Only provide a base path, not an extension, the path wil be returned")
-        path = "{}.shrynk.{}.{}".format(file_path_prefix, engine, compression)
+    def _save(
+        self,
+        df,
+        file_path_prefix,
+        allow_overwrite=False,
+        engine=None,
+        compression=None,
+        **save_kwargs
+    ):
+        for ending in [".csv", ".parquet"]:
+            if file_path_prefix.endswith(ending):
+                file_path_prefix = file_path_prefix.replace(ending, "")
+        if compression is None:
+            path = "{}.{}".format(file_path_prefix, engine)
+        else:
+            path = "{}.{}.{}".format(file_path_prefix, engine, compression)
+        path = os.path.expanduser(path)
+        if not allow_overwrite and os.path.exists(path):
+            raise ValueError("Path exists, cannot save {!r}".format(path))
         if engine is None or engine == "csv":
-            df.to_csv(path, **save_kwargs)
+            df.to_csv(path, compression=compression, **save_kwargs)
         else:
             df.columns = [str(x) for x in df.columns]
+            if engine == "pyarrow" and "allow_truncated_timestamps" not in save_kwargs:
+                save_kwargs["allow_truncated_timestamps"] = True
             df.to_parquet(path, engine=engine, compression=compression, **save_kwargs)
         return path
 
@@ -158,7 +188,14 @@ class PandasCompressor(Predictor, BaseCompressor):
         else:
             float_equal_0 = 0
             float_missing_proportion = 0
-        cardinality = df.apply(pd.Series.nunique)
+
+        # section 4: http://ftp.cse.buffalo.edu/users/azhang/disc/disc01/cd1/out/papers/pods/towardsestimatimosur.pdf
+        if df.shape[0] > 20000:
+            cardinality = pd.Series(
+                [estimate_uniqueness_proportion(df, x, 10000) for x in df.columns]
+            )
+        else:
+            cardinality = df.apply(pd.Series.nunique)
         cardinality_quantile_proportion = cardinality.quantile([0.25, 0.50, 0.75]) / num_obs
         memory_usage = df.memory_usage().sum()
         data = {
@@ -197,37 +234,3 @@ class PandasCompressor(Predictor, BaseCompressor):
 # y = [min([y for y in x["bench"] if y["kwargs"] in allowed_kwargs], key=lambda x: x[target])["kwargs"] for x in results]
 # -- for quick bench lookup
 #
-
-trained_models = {}
-
-
-def _get_model(model_name, size_write_read):
-    key = (model_name,) + size_write_read
-    if key not in trained_models:
-        pdc = PandasCompressor(model_name)
-        pdc.train_model(*size_write_read)
-        trained_models[key] = pdc
-    return trained_models[key]
-
-
-def save(
-    df,
-    fname_prefix,
-    inferred_kwargs=None,
-    size=3,
-    write=1,
-    read=1,
-    model_name="default",
-    **save_kwargs
-):
-    pdc = _get_model(model_name, (size, write, read))
-    return pdc.save(df, fname_prefix, inferred_kwargs, **save_kwargs)
-
-
-def load(file_path, inferred_kwargs=None, **load_kwargs):
-    return PandasCompressor.load(file_path, inferred_kwargs, **load_kwargs)
-
-
-def infer(df, size=1, write=0, read=0, model_name="default"):
-    pdc = _get_model(model_name, (size, write, read))
-    return pdc.infer(df)

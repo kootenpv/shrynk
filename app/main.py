@@ -240,9 +240,11 @@ html = (
         <meta charset="utf-8" />
         <meta name="author" content="Pascal van Kooten" />
         <meta property="og:title" content="shrynk.ai - Using the Power of Machine Learning to Compress" />
+        <meta property="og:title" content="shrynk uses machine learning to learn how to compress. On this page there is simple instructions, as well as a way to upload your own CSV and see how the compression/machine learning works." />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.shrynk.ai/" />
         <meta property="og:image" content="https://uvreatio.sirv.com/Images/Shrynk.png" />
+        <time datetime="2019-09-28" pubdate="pubdate"></time>
         <title>shrynk.ai - Using the Power of Machine Learning to Compress</title>
     </head>
     <body onresize="addTableClassOnSmall()">
@@ -309,8 +311,7 @@ Smallest size:      csv+bz2   ✓
 Fastest write time: csv+gzip  ✓
 Fastest read time:  csv+gzip  ✓
 
-Weighted (3, 1, 1): csv+bz2   ✓
-</code>
+Weighted (3, 1, 1): csv+bz2   ✓</code>
                 </p>
               </div>
             </div>

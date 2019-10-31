@@ -6,7 +6,7 @@ with open("README.md") as f:
 
 MAJOR_VERSION = '0'
 MINOR_VERSION = '0'
-MICRO_VERSION = '10'
+MICRO_VERSION = '14'
 VERSION = "{}.{}.{}".format(MAJOR_VERSION, MINOR_VERSION, MICRO_VERSION)
 
 setup(
@@ -25,18 +25,20 @@ setup(
     },
     install_requires=[
         'pandas',
-        'pyarrow',
+        'pyarrow==0.12.1',
         'fastparquet',
         "sklearn",
         "preconvert",
         "preconvert_numpy",
         'dill',
         'wrapt_timeout_decorator',
+        "just>=0.7.98",
     ],
     extras_require={
         "all": ["fastparquet[brotli,lz4,lzo,snappy,zstandard]"],
         "noc": ["fastparquet[brotli,lz4,snappy]"],
     },
+    entry_points={'console_scripts': ['shrynk = shrynk.__main__:main']},
     classifiers=[
         'Intended Audience :: Developers',
         'Intended Audience :: Customer Service',

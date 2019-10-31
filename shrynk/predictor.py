@@ -1,5 +1,6 @@
-import time
 import os
+import time
+import json
 import random
 import warnings
 import pkgutil
@@ -8,16 +9,20 @@ import numpy as np
 import dill
 from collections import defaultdict
 from sklearn.ensemble import RandomForestClassifier
-from shrynk.utils import scalers, get_model_data
+from shrynk.utils import scalers, get_model_data, shrynk_path
+from fractions import Fraction
 
 
 class Predictor:
-    def __init__(self, model_name, clf=RandomForestClassifier, **clf_kwargs):
+    model_name = ""
+    model_type = ""
+
+    def __init__(self, model_name="default", clf=RandomForestClassifier, **clf_kwargs):
         if "n_estimators" in clf._get_param_names() and "n_estimators" not in clf_kwargs:
             clf_kwargs["n_estimators"] = 100
         self.clf = clf(**clf_kwargs)
-        self.model_name = model_name
         self.model_data = None
+        self.model_name = model_name
         self.X_ = None
         self.y_ = None
 
@@ -93,70 +98,142 @@ class Predictor:
             report[strategy_name] = savings
         return class_accuracy, report
 
-    def train_model(self, size, write, read, scaler="z", validate_clfs=False, balanced=True):
+    def prepare_data(self, size, write, read, scaler, calc_losses):
         targets = ["size", "write_time", "read_time"]
-        if self.model_data is None:
-            self.model_data = get_model_data(self.model_name, self.compression_options)
-        scale = scalers.get(scaler, scaler)
         size_write_read = np.array((size, write, read))
+        if self.model_data is None:
+            self.model_data = get_model_data(
+                self.model_type, self.model_name, self.compression_options
+            )
+        scale = scalers.get(scaler, scaler)
         features = []
         y = []
         feature_ids = []
+        opts = [json.dumps(x) for x in self.compression_options]
+        losses = []
         for x in self.model_data:
             vals = [[y[t] for t in targets] for y in x["bench"]]
+            fid = x["feature_id"]
             z = (scale(vals) * size_write_read).sum(axis=1).argmin()
             features.append(x["features"])
             y.append(x["bench"][z]["kwargs"])
-            feature_ids.append(x["feature_id"])
-
+            feature_ids.append(fid)
+            if calc_losses:
+                scores = {x: np.nan for x in opts}
+                for t in targets:
+                    min_t = min([x[t] for x in x["bench"]])
+                    for b in x["bench"]:
+                        scores[(t, b["kwargs"])] = b[t] / min_t
+                losses.append(scores)
         bests = pd.DataFrame(features)
         bests["y"] = y
         bests["feature_id"] = feature_ids
 
-        bests = bests.sort_values("y")
-        bests["train"] = bests.index % 2 == 0
+        if calc_losses:
+            return bests, pd.DataFrame(losses)
 
-        if balanced:
-            bests = self.upsample(bests)
-        if validate_clfs:
+        return bests
+
+    def validate(self, size, write, read, scaler="z", balanced=True, train_test_ratio=0.66, k=5):
+        bests, losses = self.prepare_data(size, write, read, scaler, True)
+        bests = pd.concat((bests, losses), axis=1)
+        bests = bests.sort_values("y")
+        frac = Fraction(train_test_ratio)
+        numerator, denominator = frac._numerator, frac._denominator
+        results = []
+        print()
+        print("[shrynk] s={} w={} r={}".format(size, write, read))
+        print("----------------")
+        for i in range(k):
+            bests["train"] = [int(x[:~i], 16) % denominator < numerator for x in bests.feature_id]
             train = bests.query("train")
             test = bests.query("~train")
+            if balanced:
+                train = self.upsample(train)
+                test = self.upsample(test)
+            test = test.copy()
             self.clf.fit(train.drop(["y", "train", "feature_id"], axis=1).fillna(-100), train["y"])
             preds = self.clf.predict(test.drop(["y", "train", "feature_id"], axis=1).fillna(-100))
-            print("accuracy", np.mean(preds == test.y), "now refitting...")
-        self.clf.fit(bests.drop(["y", "train", "feature_id"], axis=1).fillna(-100), bests.y)
-        # TO FIX CROSSVAL
-        # if n_validations is not None:
-        #     return self.crossval(data, bests, target, n_validations)
+            acc = np.mean(preds == test.y)
+            single_scores = test.y.value_counts() / test.y.value_counts().sum()
+            single = round(single_scores.max() * 100, 2)
+            if not balanced:
+                print(
+                    "accuracy single best strategy {}% ({})".format(single, single_scores.idxmax())
+                )
+            else:
+                print("classes equally weighted, uniform chance: {}%".format(single))
+            print("accuracy shrynk prediction {}%".format(round(acc * 100, 2)))
+            test.loc[:, "prediction"] = preds
+            dfs = []
+            for t in ["size", "read_time", "write_time"]:
+                fucks = [test.iloc[i][(t, x)] for i, x in enumerate(test["prediction"])]
+                score = pd.Series(fucks).mean()
+                scores = [score]
+                names = ["shrynk_prediction"]
+                for x in losses.columns:
+                    if t not in x:
+                        continue
+                    scores.append(test[x].mean())
+                    names.append(x[1])
+                dfs.append(pd.DataFrame({t: scores}, index=names))
+            result = pd.concat(dfs, axis=1)
+            results.append(result)
+        # grouping over multiple of the same compressions in the index
+        results = pd.concat(results)
+        results = results.groupby(results.index).mean()
+        if max(size, write, read) == size:
+            sorter = "size"
+        elif max(size, write, read) == write:
+            sorter = "write_time"
+        elif max(size, write, read) == read:
+            sorter = "read_time"
+        results = results.sort_values(sorter)
+        print("results sorted on", sorter, "shown in proportion increase against ground truth best")
+        print(results)
+        return acc, results
+
+    def train_model(self, size, write, read, scaler="z", balanced=True):
+        size_write_read = np.array((size, write, read))
+        model_path = "{}_{}_{}_{}_{}.pkl".format(self.model_type, self.model_name, *size_write_read)
         try:
-            weight = "{}_{}_{}".format(*size_write_read)
-            clf = dill.loads(
-                pkgutil.get_data("data", "shrynk/{}_.pkl".format(self.model_name.lower(), weight))
-            )
-            self.clf = clf
+            with open(shrynk_path(model_path), "rb") as f:
+                self.clf = dill.load(f)
             print("loaded model pickle")
+            return self.clf
         except FileNotFoundError:
-            self.clf.fit(bests.drop(["y", "train", "feature_id"], axis=1).fillna(-100), bests.y)
+            bests = self.prepare_data(size, write, read, scaler, False)
+            if balanced:
+                bests = self.upsample(bests)
+            self.clf.fit(bests.drop(["y", "feature_id"], axis=1).fillna(-100), bests.y)
+        self.clf.columns_ = pd.DataFrame([x["features"] for x in self.model_data]).columns
+        with open(shrynk_path(model_path), "wb") as f:
+            dill.dump(self.clf, f)
+            print("saved model pickle")
         return self.clf
 
-    def predict(self, features):
-        from preconvert.output import json
-
-        if isinstance(features, pd.DataFrame):
-            features = self.get_features(features)
+    def _predict(self, features, deserialize=True):
         if isinstance(features, dict):
-            features = pd.DataFrame([features])
+            features = pd.DataFrame([features], columns=self.clf.columns_)
         warnings.filterwarnings(module='sklearn*', action='ignore', category=DeprecationWarning)
         pred = self.clf.predict(features.fillna(-100))[0]
         if not isinstance(pred, str):
             pred = pred[0]
-        return json.loads(pred)
+        if deserialize:
+            from preconvert.output import json
+
+            return json.loads(pred)
+        return pred
+
+    def predict(self, data, deserialize=True):
+        features = self.get_features(data)
+        return self._predict(features, deserialize)
 
     def predict_proba(self, features):
         if isinstance(features, pd.DataFrame):
             features = self.get_features(features)
         if isinstance(features, dict):
-            features = pd.DataFrame([features])
+            features = pd.DataFrame([features], columns=self.columns_)
         return dict(zip(self.clf.classes_, self.clf.predict_proba(features)[0]))
 
     infer = predict
