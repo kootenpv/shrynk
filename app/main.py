@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 from flask import send_from_directory
 import numpy as np
 import shrynk
-from shrynk.pandas import infer, PandasCompressor
+from shrynk import PandasCompressor
 from shrynk.utils import md5, scalers
 
 # from shrynk.utils import md5
@@ -30,10 +30,6 @@ if not IN_PRODUCTION:
     os.environ[
         "GOOGLE_APPLICATION_CREDENTIALS"
     ] = "/home/pascal/Downloads/api-project-435023019049-a83be40d22b6.json"
-
-
-from shrynk.pandas import PandasCompressor
-
 
 with open("table.html") as f:
     table = f.read()
@@ -420,14 +416,12 @@ def get_benchmark_html(df, fname):
             results = json.loads(blob.download_as_string())
             bench_res = results["bench"]
         else:
-            results = pdc.run_benchmarks([df], save=False, ignore_seen=False, timeout=False)[0]
+            results = pdc.run_benchmarks(df, save=False, ignore_seen=False, timeout=False)[0]
             # make a copy not to pop kwargs from results object which will be saved
             bench_res = deepcopy(results)["bench"]
             save = True
     else:
-        bench_res = pdc.run_benchmarks([df], save=False, ignore_seen=False, timeout=False)[0][
-            "bench"
-        ]
+        bench_res = pdc.run_benchmarks(df, save=False, ignore_seen=False, timeout=False)[0]["bench"]
     kwargs = [x.pop("kwargs") for x in bench_res]
     bench_res = pd.DataFrame(bench_res, index=kwargs)
     inferred = pdc.infer(features)

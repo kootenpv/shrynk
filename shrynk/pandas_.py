@@ -170,6 +170,8 @@ class PandasCompressor(Predictor, BaseCompressor):
         return data
 
     def get_features(self, df):
+        if isinstance(df, dict):
+            return df
         num_cols = df.shape[1]
         num_obs = df.shape[0]
         float_cols = [c for c, d in zip(df.columns, df.dtypes) if "float" in str(d)]

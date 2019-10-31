@@ -152,7 +152,7 @@ class BaseCompressor:
             feature_ids.add(feature_id)
         ### run benchmarks should return a total overview or something
         # return pd.DataFrame(bench).set_index("kwargs")
-        return bench
+        return results
 
     def show_benchmark(self, data, size, write, read, timeout=300):
         data, status = self.cast_to_data(data)

@@ -76,8 +76,8 @@ def show_benchmark(
     return comp.show_benchmark(data_or_fname, size, write, read, timeout)
 
 
-def run_benchmarks(data_or_fname, model_type="infer", model_name="default"):
+def run_benchmarks(data_or_fname, model_type="infer", model_name="default", save=True):
     compressor = get_compressor(model_type, data_or_fname, data_or_fname)
     comp = compressor(model_name)
-    bench = comp.run_benchmarks(data_or_fname, verbose=False)
+    bench = comp.run_benchmarks(data_or_fname, verbose=False, save=save)
     return bench
