@@ -4,9 +4,9 @@ __project__ = "shrynk"
 __version__ = "0.1.19"
 
 import pandas as pd
-from shrynk.pandas_ import PandasCompressor
-from shrynk.json_ import JsonCompressor
-from shrynk.bytes import BytesCompressor
+from shrynk.classes.pandas_ import PandasCompressor
+from shrynk.classes.json_ import JsonCompressor
+from shrynk.classes.bytes import BytesCompressor
 
 trained_models = {}
 

@@ -9,7 +9,7 @@ import numpy as np
 import dill
 from collections import defaultdict
 from sklearn.ensemble import RandomForestClassifier
-from shrynk.utils import scalers, get_model_data, shrynk_path
+from shrynk.utils import scalers, get_model_data, shrynk_path, add_z_to_bench
 from fractions import Fraction
 
 
@@ -123,7 +123,7 @@ class Predictor:
                 for t in targets:
                     min_t = min([x[t] for x in x["bench"]])
                     for b in x["bench"]:
-                        scores[(t, b["kwargs"])] = b[t] / min_t
+                        scores[(t, b["kwargs"])] = (b[t] or 1) / (min_t or 1)
                 losses.append(scores)
         bests = pd.DataFrame(features)
         bests["y"] = y
@@ -141,6 +141,7 @@ class Predictor:
         frac = Fraction(train_test_ratio)
         numerator, denominator = frac._numerator, frac._denominator
         results = []
+        accs = []
         print()
         print("[shrynk] s={} w={} r={}".format(size, write, read))
         print("----------------")
@@ -157,13 +158,17 @@ class Predictor:
             acc = np.mean(preds == test.y)
             single_scores = test.y.value_counts() / test.y.value_counts().sum()
             single = round(single_scores.max() * 100, 2)
+            acc_str = " | accuracy shrynk prediction {}%".format(round(acc * 100, 2))
+            it_str = "it {}/{}: ".format(i, k)
             if not balanced:
-                print(
-                    "accuracy single best strategy {}% ({})".format(single, single_scores.idxmax())
+                strat_str = "accuracy single best strategy {}% ({})".format(
+                    single, single_scores.idxmax()
                 )
+                print(it_str + +acc_str)
             else:
-                print("classes equally weighted, uniform chance: {}%".format(single))
-            print("accuracy shrynk prediction {}%".format(round(acc * 100, 2)))
+                strat_str = "classes equally weighted, uniform chance: {}%".format(single)
+            print(it_str + strat_str + acc_str)
+            accs.append(acc)
             test.loc[:, "prediction"] = preds
             dfs = []
             for t in ["size", "read_time", "write_time"]:
@@ -182,16 +187,28 @@ class Predictor:
         # grouping over multiple of the same compressions in the index
         results = pd.concat(results)
         results = results.groupby(results.index).mean()
-        if max(size, write, read) == size:
-            sorter = "size"
-        elif max(size, write, read) == write:
-            sorter = "write_time"
-        elif max(size, write, read) == read:
-            sorter = "read_time"
+        if [size, write, read].count(0) == 2:
+            if max(size, write, read) == size:
+                sorter = "size"
+            elif max(size, write, read) == write:
+                sorter = "write_time"
+            elif max(size, write, read) == read:
+                sorter = "read_time"
+        else:
+            results = add_z_to_bench(results, size, write, read)
+            sorter = "z"
         results = results.sort_values(sorter)
-        print("results sorted on", sorter, "shown in proportion increase against ground truth best")
+        avg_acc = round(np.mean(accs), 3)
+        print("Avg Accuracy:", avg_acc)
+
+        print()
+        print(
+            "results sorted on {}, shown in proportion increase vs ground truth best".format(
+                sorter.upper()
+            )
+        )
         print(results)
-        return acc, results
+        return avg_acc, results
 
     def train_model(self, size, write, read, scaler="z", balanced=True):
         size_write_read = np.array((size, write, read))

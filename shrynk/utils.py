@@ -81,7 +81,8 @@ def add_z_to_bench(bench, size, write, read, scaler="z"):
         bench = pd.DataFrame(bench)[["kwargs", "size", "write_time", "read_time"]]
     if "kwargs" in bench.columns:
         bench = bench.set_index("kwargs")
+    bench = bench.loc[:, ["size", "write_time", "read_time"]]
     scale = scalers.get(scaler, scaler)
     z = (scale(bench) * (size, write, read)).sum(axis=1)
-    bench["z"] = z
+    bench.loc[:, "z"] = z
     return bench.sort_values("z")
