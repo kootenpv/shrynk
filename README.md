@@ -7,7 +7,7 @@
 [![PyPI](https://img.shields.io/pypi/v/shrynk.svg?style=flat-square&logo=pypi)](https://pypi.python.org/pypi/shrynk/)
 [![HitCount](http://hits.dwyl.io/kootenpv/shrynk.svg)](http://hits.dwyl.io/kootenpv/shrynk)
 
-You can read the [introductory blog post](https://vks.ai/2019-11-17-shrynk-using-machine-learning-to-learn-how-to-compress) or try it live at https://shrynk.ai
+You can read the [introductory blog post](https://vks.ai/2019-12-05-shrynk-using-machine-learning-to-learn-how-to-compress) or try it live at https://shrynk.ai
 
 ### Features
 
