@@ -6,7 +6,7 @@ with open("README.md") as f:
 
 MAJOR_VERSION = '0'
 MINOR_VERSION = '2'
-MICRO_VERSION = '19'
+MICRO_VERSION = '21'
 VERSION = "{}.{}.{}".format(MAJOR_VERSION, MINOR_VERSION, MICRO_VERSION)
 
 setup(
