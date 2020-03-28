@@ -315,6 +315,7 @@ Weighted (3, 1, 1): csv+bz2   ✓</code>
         </div>
         </div>
 
+<center>You can either read the <a href="https://vks.ai/2019-12-05-shrynk-using-machine-learning-to-learn-how-to-compress">blog</a>, or keep on reading and try a demo.</center>
 
         <center><h5 class="tagline">Usage:</h5></center>
         <div class="container"><div class="row">

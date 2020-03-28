@@ -25,14 +25,15 @@ setup(
     },
     install_requires=[
         'pandas',
-        'pyarrow==0.12.1',
+        'pyarrow',
         'fastparquet',
         "sklearn",
         "preconvert",
         "preconvert_numpy",
         'dill',
         'wrapt_timeout_decorator',
-        "just>=0.7.98",
+        "just>=0.7.102",
+        "cliche",
     ],
     extras_require={
         "all": ["fastparquet[brotli,lz4,lzo,snappy,zstandard]"],

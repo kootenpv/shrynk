@@ -25,9 +25,6 @@ def main():
     benchmark.add_argument('--read', '-r', default=1, type=int, help='Read-time weight for model')
     benchmark.add_argument('--predict', help='Read-time weight for model', action="store_true")
     benchmark.add_argument('--save', help='Read-time weight for model', action="store_true")
-    parser.add_argument(
-        '-password', '-p', help='Preferable to use keyring rather than password here'
-    )
     args = parser.parse_args()
     if args.command == "compress":
         data = load(args.file)
