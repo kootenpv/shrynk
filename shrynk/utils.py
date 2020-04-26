@@ -1,4 +1,5 @@
 import os
+import warnings
 import pandas as pd
 from gzip import GzipFile, decompress
 import pkgutil
@@ -83,6 +84,8 @@ def add_z_to_bench(bench, size, write, read, scaler="z"):
         bench = bench.set_index("kwargs")
     bench = bench.loc[:, ["size", "write_time", "read_time"]]
     scale = scalers.get(scaler, scaler)
-    z = (scale(bench) * (size, write, read)).sum(axis=1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        z = (scale(bench) * (size, write, read)).sum(axis=1)
     bench.loc[:, "z"] = z
     return bench.sort_values("z")

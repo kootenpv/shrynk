@@ -8,7 +8,11 @@ import pandas as pd
 import numpy as np
 import dill
 from collections import defaultdict
-from sklearn.ensemble import RandomForestClassifier
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    from sklearn.ensemble import RandomForestClassifier
+
 from shrynk.utils import scalers, get_model_data, shrynk_path, add_z_to_bench
 from fractions import Fraction
 
@@ -114,7 +118,9 @@ class Predictor:
         for x in self.model_data:
             vals = [[y[t] for t in targets] for y in x["bench"]]
             fid = x["feature_id"]
-            z = (scale(vals) * size_write_read).sum(axis=1).argmin()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                z = (scale(vals) * size_write_read).sum(axis=1).argmin()
             features.append(x["features"])
             y.append(x["bench"][z]["kwargs"])
             feature_ids.append(fid)
@@ -232,8 +238,9 @@ class Predictor:
     def _predict(self, features, deserialize=True):
         if isinstance(features, dict):
             features = pd.DataFrame([features], columns=self.clf.columns_)
-        warnings.filterwarnings(module='sklearn*', action='ignore', category=DeprecationWarning)
-        pred = self.clf.predict(features.fillna(-100))[0]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            pred = self.clf.predict(features.fillna(-100))[0]
         if not isinstance(pred, str):
             pred = pred[0]
         if deserialize:

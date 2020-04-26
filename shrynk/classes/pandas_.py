@@ -1,6 +1,7 @@
 import re
 import os
 import math
+import warnings
 from collections import Counter
 import zipfile
 
@@ -54,7 +55,9 @@ except ImportError:
 
 # OPTIONAL: load fastparquet
 try:
-    from fastparquet.compression import compressions
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from fastparquet.compression import compressions
 
     # BROTLI IS BUGGED!
     _fastparquet_opts = [
@@ -154,7 +157,9 @@ class PandasCompressor(Predictor, BaseCompressor):
             df.columns = [str(x) for x in df.columns]
             if engine == "pyarrow" and "allow_truncated_timestamps" not in save_kwargs:
                 save_kwargs["allow_truncated_timestamps"] = True
-            df.to_parquet(path, engine=engine, compression=compression, **save_kwargs)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                df.to_parquet(path, engine=engine, compression=compression, **save_kwargs)
         return path
 
     @classmethod
