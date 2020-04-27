@@ -28,7 +28,7 @@ def main():
     args = parser.parse_args()
     if args.command == "compress":
         data = load(args.file)
-        save(data, args.file, size=args.size, write=args.write, read=args.read)
+        print(save(data, args.file, size=args.size, write=args.write, read=args.read))
     if args.command == "decompress":
         data = load(args.file)
         if "json" in args.file:

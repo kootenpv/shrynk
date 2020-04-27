@@ -1,7 +1,7 @@
 """ shrynk - Using Machine Learning as Meta Decision Maker for Compression. """
 
 __project__ = "shrynk"
-__version__ = "0.2.21"
+__version__ = "0.2.25"
 
 import pandas as pd
 from shrynk.classes.pandas_ import PandasCompressor
