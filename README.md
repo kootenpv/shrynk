@@ -28,7 +28,28 @@ You can read the [introductory blog post](https://vks.ai/2019-12-05-shrynk-using
     shrynk benchmark --predict myfile.csv        # will also show the current prediction
     shrynk benchmark --save --predict myfile.csv # will add the result to the training data too
 
-### Usage
+### Usage in Docker
+
+To test shrynk out quickly yourself, you can use the official docker image from DockerHub. It is great not to interfere with an existing python installation.
+
+You can also build the image from scratch by going to [the docker folder here](./docker/) and doing `docker build -t shrynk .` and use `shrynk` instead of `kootenpv/shrynk` above.
+
+In the following commands, replace `~/Downloads` with the folder you want to share with the container (where the file you want to compress is).
+
+```bash
+# To see help
+docker run --rm -v ~/.shrynk:/root/.shrynk -v ~/Downloads:/data kootenpv/shrynk shrynk --help
+
+# To compress a file called train.csv in your ~/Downloads folder
+docker run --rm -v ~/.shrynk:/root/.shrynk -v ~/Downloads:/data kootenpv/shrynk \
+   shrynk compress /data/train.csv
+
+# To benchmark and predict the train.csv file in your ~/Downloads folder
+docker run --rm -v ~/.shrynk:/root/.shrynk -v ~/Downloads:/data kootenpv/shrynk \
+   shrynk benchmark --predict /data/train.csv
+```
+
+### Usage in Python
 
 Installation:
 
